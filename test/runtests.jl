@@ -5,6 +5,7 @@ using Statistics
 using SparseArrays
 using LinearAlgebra
 using StatsBase: sample!
+using CategoricalArrays: categorical
 
 """
     make_blobs(; d, n_per, ntest_per, seed) -> (X_train, y_train, X_test, y_test)
@@ -165,6 +166,20 @@ const γ = 0.9
         y_pred = predict(model, X_test)
         @test eltype(y_pred) == Symbol
         @test all(in((:cat, :dog)), y_pred)
+    end
+
+    @testset "CategoricalArray labels (OpenML-style targets)" begin
+        # `unique` on a CategoricalArray returns another CategoricalArray, which
+        # must still be stored as a plain `Vector` in the model.
+        X_train, y_int, X_test, y_test = make_blobs()
+        y_train = categorical(map(v -> v == 1 ? "a" : "b", y_int))
+        U = RandomUniformProjectionMatrix(m, d; seed=42)
+
+        model = fit(FlyNNA, X_train, y_train, U, k)
+        @test model.class_labels isa Vector
+        y_pred = predict(model, X_test)
+        @test length(y_pred) == length(y_test)
+        @test all(p -> String(p) in ("a", "b"), y_pred)
     end
 
     @testset "Argument validation" begin
