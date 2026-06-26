@@ -21,7 +21,7 @@ function fit(::Type{FlyNNA}, X::AbstractMatrix{T}, y::AbstractVector, P::Abstrac
     d_X, n = size(X)
     m, d_P = size(P)
 
-    @assert d_X == d_P "Dimension mismatch: X has $d_X rows, M has $d_P rows."
+    @assert d_X == d_P "Dimension mismatch: X has $d_X rows, P has $d_P rows."
     @assert length(y) == n "Number of labels does not match number of data points."
 
     # Robust mapping of class labels to integer indices (1, 2, ..., l).

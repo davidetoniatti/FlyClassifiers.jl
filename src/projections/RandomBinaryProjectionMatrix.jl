@@ -86,8 +86,8 @@ result vector at `y[i]`. This avoids unnecessary multiplications by zero.
 function mul!(y::Vector{T}, P::RandomBinaryProjectionMatrix, x::AbstractVector{T}) where T
     m, d = size(P)
 
-    @assert length(y) == m "Output vector length must match the number of rows in M."
-    @assert length(x) == d "Input vector length must match the number of columns in M."
+    @assert length(y) == m "Output vector length must match the number of rows in P."
+    @assert length(x) == d "Input vector length must match the number of columns in P."
 
     # Initialize the output vector to zero to ensure a clean slate for accumulation.
     fill!(y, zero(T))

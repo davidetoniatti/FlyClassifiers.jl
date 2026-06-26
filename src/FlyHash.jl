@@ -18,7 +18,7 @@ function FlyHash(X::AbstractMatrix, P::AbstractProjectionMatrix, k::Int)
     d_X, n = size(X)
     m, d_P = size(P)
 
-    @assert d_X == d_P "Dimension mismatch: X has $d_X rows, M has $d_P rows."
+    @assert d_X == d_P "Dimension mismatch: X has $d_X rows, P has $d_P rows."
 
     # Determine the computation type based on the element types of X and M.
     T = promote_type(eltype(X), eltype(P.matrix))

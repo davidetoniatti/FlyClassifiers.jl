@@ -192,6 +192,10 @@ const γ = 0.9
 
         # Number of labels must match the number of data points.
         @test_throws AssertionError fit(FlyNNM, X_train, y_train[1:end-1], U, k, γ)
+
+        # Decay rate γ must lie in [0, 1); γ ≥ 1 would produce NaN weights.
+        @test_throws AssertionError fit(FlyNNM, X_train, y_train, U, k, 1.0)
+        @test_throws AssertionError fit(FlyNNM, X_train, y_train, U, k, -0.5)
     end
 
 end
