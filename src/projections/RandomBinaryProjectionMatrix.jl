@@ -10,44 +10,50 @@ struct RandomBinaryProjectionMatrix <: AbstractProjectionMatrix{Bool}
 end
 
 """
-    RandomBinaryProjectionMatrix(d::Int, m::Int, s::Int, seed::Int) ->
+    RandomBinaryProjectionMatrix(m::Int, d::Int, s::Int; seed::Int=42) ->
     RandomBinaryProjectionMatrix
 
 Constructor for a binary projection matrix of size `m x d`, where each row has
 exactly `s` non-zero elements, placed in random columns.
 
+The generated matrix is fully reproducible: each row is seeded independently
+from `(seed, row)`, so the result is identical regardless of the number of
+threads used to build it.
+
 # Arguments
-- `d::Int`: Number of rows.
-- `m::Int`: Number of columns.
-- `s::Int`: Number of non-zero elements per columns.
-- `seed::Int`: Seed for initializing the random number generators.
+- `m::Int`: Number of rows (projection dimension).
+- `d::Int`: Number of columns (original dimension).
+- `s::Int`: Number of non-zero elements per row.
+- `seed::Int`: Base seed for the per-row random number generators.
 """
 function RandomBinaryProjectionMatrix(m::Int, d::Int, s::Int; seed::Int=42)
 
-    nnz = m * s
-    row_idx = Vector{Int}(undef, nnz)
-    col_idx = Vector{Int}(undef, nnz)
+    total_nnz = m * s
+    row_idx = Vector{Int}(undef, total_nnz)
+    col_idx = Vector{Int}(undef, total_nnz)
 
-    # Use multithreading to generate rows in parallel.
+    # Generate rows in parallel. Each row `i` is seeded independently from
+    # `(seed, i)`, so the output is independent of how `chunks` partitions the
+    # rows across threads. (Per-chunk seeding made the matrix depend on
+    # `nthreads()`, breaking reproducibility across machines / thread counts.)
     tasks = map(chunks(1:m; n=nthreads())) do inds
-	@spawn begin
-	    chunk_seed = seed + first(inds)
-	    rng = Xoshiro(chunk_seed)
-	    # Task-local buffer for sampling indices
-	    idxs = Vector{Int}(undef, s)
+        @spawn begin
+            # Task-local buffer for sampling indices.
+            idxs = Vector{Int}(undef, s)
 
-	    for i in inds
-		start_pos = (i - 1) * s + 1
-		end_pos = i * s
+            for i in inds
+                rng = Xoshiro(hash((seed, i)))
+                start_pos = (i - 1) * s + 1
+                end_pos = i * s
 
-		# Sampling.
-		sample!(rng, 1:d, idxs; replace=false)
+                # Sample `s` distinct column indices for row `i`.
+                sample!(rng, 1:d, idxs; replace=false)
 
-		# Fill the row and column index vectors.
-		@inbounds row_idx[start_pos:end_pos] .= i
-		@inbounds col_idx[start_pos:end_pos] .= idxs
-	    end
-	end
+                # Fill the row and column index vectors.
+                @inbounds row_idx[start_pos:end_pos] .= i
+                @inbounds col_idx[start_pos:end_pos] .= idxs
+            end
+        end
     end
 
     foreach(wait, tasks)
