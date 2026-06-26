@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+# Cancel in-progress runs for the same ref when new commits are pushed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Julia ${{ matrix.version }} - ${{ matrix.threads }} thread(s)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1.12'
+        threads:
+          - '1'
+          - '4'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+      - uses: julia-actions/cache@v2
+      - uses: julia-actions/julia-buildpkg@v1
+      # Run the suite under different thread counts: the projection matrices and
+      # all predictions must be identical regardless of how many threads build
+      # them, so this is what guards reproducibility.
+      - uses: julia-actions/julia-runtest@v1
+        env:
+          JULIA_NUM_THREADS: ${{ matrix.threads }}
