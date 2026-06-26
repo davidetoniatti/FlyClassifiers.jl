@@ -22,9 +22,10 @@ using TOML
 using ArgParse
 using Logging
 
-# Including local modules
-include("../src/FlyClassifiers.jl")
-using .FlyClassifiers
+# Load the local package (declared as a path dependency in this environment's
+# Project.toml). Using it as a package resolves its own dependencies (e.g.
+# ChunkSplitters); a bare `include` of the source would not.
+using FlyClassifiers
 
 const K_FOLDS = 5
 
@@ -288,6 +289,53 @@ function load_config(config_path::String, experiment_type::String)::Hyperparamet
     )
 end
 
+"""
+Writes a provenance file next to the result CSVs, recording everything needed
+to reproduce the run: Julia version, thread count, base seed, number of
+cross-validation folds, the resolved hyperparameters and the versions of all
+packages in the active environment.
+"""
+function write_provenance(results_dir::String, experiment::String, config::Hyperparameters)
+    !isdir(results_dir) && mkpath(results_dir)
+
+    # Resolved version of every package in the active environment.
+    pkg_versions = Dict(
+        info.name => string(info.version)
+        for (_, info) in Pkg.dependencies() if info.version !== nothing
+    )
+
+    # Current git commit, if the script is run from inside the repository.
+    git_commit = try
+        strip(read(`git rev-parse HEAD`, String))
+    catch
+        "unknown"
+    end
+
+    metadata = Dict(
+        "experiment" => experiment,
+        "timestamp" => Libc.strftime("%Y-%m-%dT%H:%M:%S", time()),
+        "julia_version" => string(VERSION),
+        "nthreads" => Threads.nthreads(),
+        "git_commit" => git_commit,
+        "base_seed" => 42,
+        "k_folds" => K_FOLDS,
+        "config" => Dict(
+            "exp_values" => config.exp_values,
+            "nnz_values" => config.nnz_values,
+            "gamma" => config.gamma,
+            "s_ratio" => config.s_ratio,
+            "normalize" => config.normalize,
+        ),
+        "packages" => pkg_versions,
+    )
+
+    output_path = joinpath(results_dir, "run_metadata_$(experiment).toml")
+    open(output_path, "w") do io
+        TOML.print(io, metadata)
+    end
+    println("Provenance written to '$output_path'")
+end
+
 function parse_commandline()
     s = ArgParseSettings(description = "Run classification experiments.")
     
@@ -322,7 +370,11 @@ function main()
 
     try
         config = load_config(config_path, experiment)
-        
+
+        # Record run provenance before the experiment, so it exists even if a
+        # later dataset fails partway through.
+        write_provenance(results_dir, experiment, config)
+
         if experiment == "vision"
             vision_datasets_experiments(results_dir, config)
         elseif experiment == "openml"

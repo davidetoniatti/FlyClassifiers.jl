@@ -28,7 +28,10 @@ function fit(::Type{FlyNNM}, X::AbstractMatrix, y::AbstractVector, P::AbstractPr
 
     # Robust mapping of class labels to integer indices (1, 2, ..., l).
     # This makes the code work with non-numeric or non-sequential labels.
-    class_labels = unique(y)
+    # Force a plain `Vector`: a CategoricalArray target would otherwise stay a
+    # CategoricalArray through `unique`, which does not match `class_labels`.
+    raw_labels = unique(y)
+    class_labels = Vector{eltype(raw_labels)}(raw_labels)
     l = length(class_labels)
     class_map = Dict(label => i for (i, label) in enumerate(class_labels))
 

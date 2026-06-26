@@ -37,7 +37,9 @@ This modularity is used to implement and evaluate a family of four distinct clas
 
 * `/experiments`: Holds the scripts used to run the experimental evaluation (`experiments.jl`) and generate plots (`plots.jl`) for the thesis.
 
-* `/test`: Contains unit tests for the classifiers.
+* `/test`: Contains the unit tests (`runtests.jl`), run with `julia --project=test test/runtests.jl` or `Pkg.test()`. The suite also checks that results are reproducible across thread counts.
+
+* `/bench`: Holds the manual benchmark script (`benchmark_mnist.jl`) and its own environment.
 
 ## Basic Usage
 

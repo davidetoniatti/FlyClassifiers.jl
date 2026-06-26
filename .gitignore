@@ -15,3 +15,6 @@ Thumbs.db
 .ipynb_checkpoints/
 plots*/
 results*/
+
+# Experiment run artifacts
+experiment_log.txt

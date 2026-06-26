@@ -4,3 +4,10 @@ nnz_values = [128.0, 256.0]
 gamma = 0.9
 s_ratio = 0.1
 normalize = true
+
+[vision]
+exp_values = [8]
+nnz_values = [16.0, 32.0, 64.0, 128.0, 256.0]
+gamma = 0.9
+s_ratio = 0.1
+normalize = false
