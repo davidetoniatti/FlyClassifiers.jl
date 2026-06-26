@@ -33,7 +33,7 @@ function generate_bar_plots(df::DataFrame, exp::Int, plots_dir::String)
     filename = joinpath(plots_dir, "comparison_models_m_$(exp)d.png")
     savefig(plot_obj, filename)
 
-    println("Scatter plots for m = $(exp)d saved to '$(plots_dir)/' directory.")
+    println("Comparison bar plot for m = $(exp)d saved to '$(plots_dir)/' directory.")
 end
 
 """
@@ -94,13 +94,15 @@ function generate_scatter_plots(results_df::DataFrame, exp::Int, plots_dir::Stri
         return
     end
 
+    # Column names must match those written by experiments.jl:
+    # FlyNNM_Binary, FlyNNM_Uniform, FlyNNA_Binary, FlyNNA_Uniform.
     comparisons = [
-        (Symbol("FlyNN-M_Binary"), Symbol("FlyNN-M_Uniform"), "Multiplicative filter: Binary vs Uniform projection"),
-        (Symbol("FlyNN-A_Binary"), Symbol("FlyNN-A_Uniform"), "Additive filter: Binary vs Uniform projection"),
-        (Symbol("FlyNN-M_Binary"), Symbol("FlyNN-A_Binary"), "Binary Projection: Multiplicative vs Additive filter"),
-        (Symbol("FlyNN-M_Uniform"), Symbol("FlyNN-A_Uniform"), "Uniform Projection: Multiplicative vs Additive filter"),
-        (Symbol("FlyNN-M_Binary"), Symbol("FlyNN-A_Uniform"), "FlyNN-M original vs FlyNN-A original"),
-        (Symbol("FlyNN-M_Uniform"), Symbol("FlyNN-A_Binary"), "FlyNN-M Uniform vs FlyNN-A Binary"),
+        (Symbol("FlyNNM_Binary"), Symbol("FlyNNM_Uniform"), "Multiplicative filter: Binary vs Uniform projection"),
+        (Symbol("FlyNNA_Binary"), Symbol("FlyNNA_Uniform"), "Additive filter: Binary vs Uniform projection"),
+        (Symbol("FlyNNM_Binary"), Symbol("FlyNNA_Binary"), "Binary Projection: Multiplicative vs Additive filter"),
+        (Symbol("FlyNNM_Uniform"), Symbol("FlyNNA_Uniform"), "Uniform Projection: Multiplicative vs Additive filter"),
+        (Symbol("FlyNNM_Binary"), Symbol("FlyNNA_Uniform"), "FlyNN-M original vs FlyNN-A original"),
+        (Symbol("FlyNNM_Uniform"), Symbol("FlyNNA_Binary"), "FlyNN-M Uniform vs FlyNN-A Binary"),
     ]
 
     # model_cols = select(results_df, Not(:DatasetName))
