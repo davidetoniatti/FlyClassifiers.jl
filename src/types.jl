@@ -20,8 +20,8 @@ abstract type AbstractFliesClassifier end
 
 A struct to hold the components of a trained FlyNNM model.
 """
-struct FlyNNM{T} <: AbstractFliesClassifier
-    P::AbstractProjectionMatrix
+struct FlyNNM{T,TP<:AbstractProjectionMatrix} <: AbstractFliesClassifier
+    P::TP
     W::Matrix{Float64}
     k::Int
     class_labels::Vector{T}
@@ -32,10 +32,10 @@ end
 
 A struct to hold the components of a trained FlyNNA model.
 """
-struct FlyNNA <: AbstractFliesClassifier
-    P::AbstractProjectionMatrix
+struct FlyNNA{T,TP<:AbstractProjectionMatrix} <: AbstractFliesClassifier
+    P::TP
     W::Matrix{Float64}
     ct::Vector{Int64}
     k::Int
-    class_labels::Vector
+    class_labels::Vector{T}
 end

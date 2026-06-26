@@ -41,7 +41,7 @@ function FlyHash(X::AbstractMatrix, P::AbstractProjectionMatrix, k::Int)
 		 end_pos = i * k
 
 		 # In-place multiplication
-		 mul!(x_proj, P, X[:, i])
+		 mul!(x_proj, P, @view X[:, i])
 
 		 # Find the indices of the k largest values.
 		 _topk_indices!(top_idxs, top_vals, x_proj, k)
