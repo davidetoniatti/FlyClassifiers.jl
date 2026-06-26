@@ -2,6 +2,7 @@ using MLUtils: MLUtils, flatten, mapobs, splitobs
 using MLDatasets, BenchmarkTools
 using MultivariateStats, StatsBase
 using FlyClassifiers
+using Random
 
 # Data Preparation
 X, y = MLDatasets.FashionMNIST()[:]

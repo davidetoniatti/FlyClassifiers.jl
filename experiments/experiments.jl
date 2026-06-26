@@ -78,13 +78,13 @@ function cross_validation(model_type, proj_type, X, y, m, k, s, γ; normalize=fa
         println(model_type, proj_type)
         
         model = if model_type == FlyNNM
-            FliesClassifiers.fit(FlyNNM, X_train, y_train, P, k, γ)
+            FlyClassifiers.fit(FlyNNM, X_train, y_train, P, k, γ)
         else # EaS
-            FliesClassifiers.fit(FlyNNA, X_train, y_train, P, k)
+            FlyClassifiers.fit(FlyNNA, X_train, y_train, P, k)
         end
         println("training ok")
 
-        y_pred = FliesClassifiers.predict(model, X_test)
+        y_pred = FlyClassifiers.predict(model, X_test)
         accuracy = Statistics.mean(y_pred .== y_test)
         println("pred ok")
         push!(accuracies, accuracy)

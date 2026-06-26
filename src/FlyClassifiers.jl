@@ -6,7 +6,8 @@ using LinearAlgebra
 using SparseArrays
 using StatsBase
 using Random
-using .Threads
+using Base.Threads: @spawn, nthreads, @threads
+using ChunkSplitters: chunks
 
 abstract type AbstractProjectionMatrix{T} <: AbstractMatrix{T} end
 include("projections/RandomBinaryProjectionMatrix.jl")

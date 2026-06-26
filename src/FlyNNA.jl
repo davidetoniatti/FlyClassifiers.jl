@@ -30,34 +30,32 @@ function fit(::Type{FlyNNA}, X::AbstractMatrix{T}, y::AbstractVector, P::Abstrac
     l = length(class_labels)
     class_map = Dict(label => i for (i, label) in enumerate(class_labels))
 
-    # Determine the computation type based on the element types of X and P.
-    # T_proj = promote_type(T, eltype(P.matrix))
-    # 
     H = FlyHash(X, P, k).matrix
 
-    # Safe parallelization with thread-local storage for weights and counters
-    W_local = [zeros(Int, l, m) for _ in 1:nthreads()]
-    ct_local = [zeros(Int, m) for _ in 1:nthreads()]
-    
-    
+    # Each task computes a partial W and count vector
+    tasks = map(chunks(1:n; n=nthreads())) do inds
+        @spawn begin
+            # Task-local accumulators
+            W_local = zeros(Int, l, m)
+            ct_local = zeros(Int, m)
 
-    # x_proj_local = [Vector{T_proj}(undef, m) for _ in 1:nthreads()]
-    # top_idxs_local = [Vector{Int}(undef, k) for _ in 1:nthreads()]
-    # top_vals_local = [Vector{T_proj}(undef, k) for _ in 1:nthreads()]
-
-    @threads for i in 1:n
-        tid = threadid()
-        class_idx = class_map[@inbounds y[i]]
-
-        @inbounds for j in H.colptr[i]:(H.colptr[i+1]-1)
-            r = H.rowval[j]
-            W_local[tid][class_idx, r] += 1
-            ct_local[tid][r] += 1
+            for i in inds
+                class_idx = class_map[@inbounds y[i]]
+                @inbounds for j in H.colptr[i]:(H.colptr[i+1]-1)
+                    r = H.rowval[j]
+                    W_local[class_idx, r] += 1
+                    ct_local[r] += 1
+                end
+            end
+            return (W_local, ct_local)
         end
     end
 
-    W_total = reduce(+, W_local)
-    ct_total = reduce(+, ct_local)
+    results = fetch.(tasks)
+
+    # Reduction step
+    W_total = sum(first.(results))
+    ct_total = sum(last.(results))
 
     W_normalized = zeros(Float64, l, m)
     valid_indices = ct_total .> 0
@@ -85,39 +83,35 @@ Ties are broken deterministically by selecting the first class with maximum scor
 function predict(model::FlyNNA, X::AbstractMatrix{T}) where T
     n = size(X, 2)
     l, m = size(model.W)
-    
+
     y_pred = Vector{eltype(model.class_labels)}(undef, n)
-    
     T_proj = promote_type(T, eltype(model.P.matrix))
-    
-    # Thread-local buffers
-    x_proj_local = [Vector{T_proj}(undef, m) for _ in 1:nthreads()]
-    top_idxs_local = [Vector{Int}(undef, model.k) for _ in 1:nthreads()]
-    top_vals_local = [Vector{T_proj}(undef, model.k) for _ in 1:nthreads()]
-    class_scores_local = [Vector{eltype(model.W)}(undef, l) for _ in 1:nthreads()]
-    
-    @threads for i in 1:n
-        tid = threadid()
-        
-        x_proj = x_proj_local[tid]
-        top_idxs = top_idxs_local[tid]
-        top_vals = top_vals_local[tid]
-        class_scores = class_scores_local[tid]
-        
-        x_view = @view X[:, i]
-        mul!(x_proj, model.P, x_view)
-        _topk_indices!(top_idxs, top_vals, x_proj, model.k)
-        
-        fill!(class_scores, 0)
-        active_weights = @view model.W[:, top_idxs]
-        sum!(class_scores, active_weights)
-        
-        # Deterministic tie-break: argmax returns the first maximum
-        winner_idx = argmax(class_scores)
-        
-        @inbounds y_pred[i] = model.class_labels[winner_idx]
+
+    tasks = map(chunks(1:n; n=nthreads())) do inds
+        @spawn begin
+            # Allocate buffers once per task
+            x_proj = Vector{T_proj}(undef, m)
+            top_idxs = Vector{Int}(undef, model.k)
+            top_vals = Vector{T_proj}(undef, model.k)
+            class_scores = Vector{eltype(model.W)}(undef, l)
+
+            for i in inds
+                # Re-use buffers for every item in this chunk
+                mul!(x_proj, model.P, view(X, :, i))
+                _topk_indices!(top_idxs, top_vals, x_proj, model.k)
+
+                fill!(class_scores, 0)
+                # View into the weights for active indices
+                active_weights = view(model.W, :, top_idxs)
+                sum!(class_scores, active_weights)
+
+                winner_idx = argmax(class_scores)
+                @inbounds y_pred[i] = model.class_labels[winner_idx]
+            end
+        end
     end
-    
+    foreach(wait, tasks)
+
     return y_pred
 end
 
