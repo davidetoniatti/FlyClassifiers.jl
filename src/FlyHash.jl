@@ -23,36 +23,38 @@ function FlyHash(X::AbstractMatrix, P::AbstractProjectionMatrix, k::Int)
     # Determine the computation type based on the element types of X and M.
     T = promote_type(eltype(X), eltype(P.matrix))
 
-    # Thread-local storage to avoid race conditions and allocations.
-    # Each thread gets its own local vector `x_proj` for intermediate results.
-    x_proj_local = [Vector{T}(undef, m) for _ in 1:Threads.nthreads()]
-    top_idxs_local = [Vector{Int}(undef, k) for _ in 1:nthreads()]
-    top_vals_local = [Vector{T}(undef, k) for _ in 1:nthreads()]
 
     nnz = n * k
     row_idx = Vector{Int}(undef, nnz)
     col_idx = Vector{Int}(undef, nnz)
 
-    @threads for i in 1:n
-        tid = threadid()
-        start_pos = (i - 1) * k + 1
-        end_pos = i * k
+    tasks = map(chunks(1:n; n=nthreads())) do inds
+	@spawn begin
+	    # Buffers are now task-local, not thread-local.
+	    # Safe regardless of migration.
+	    x_proj = Vector{T}(undef, m)
+	    top_idxs = Vector{Int}(undef, k)
+	    top_vals = Vector{T}(undef, k)
 
-        # Get the current thread's local vector.
-        x_proj = x_proj_local[tid]
-        top_idxs = top_idxs_local[tid]
-        top_vals = top_vals_local[tid]
+	     for i in inds
+		 start_pos = (i - 1) * k + 1
+		 end_pos = i * k
 
-        # In-place multiplication
-        mul!(x_proj, P, X[:, i])
+		 # In-place multiplication
+		 mul!(x_proj, P, X[:, i])
 
-        # Find the indices of the k largest values.
-        _topk_indices!(top_idxs, top_vals, x_proj, k)
-        #partialsortperm!(top_idxs, x_proj, k; rev=true)
+		 # Find the indices of the k largest values.
+		 _topk_indices!(top_idxs, top_vals, x_proj, k)
+		 #partialsortperm!(top_idxs, x_proj, k; rev=true)
 
-        @inbounds row_idx[start_pos:end_pos] .= top_idxs
-        @inbounds col_idx[start_pos:end_pos] .= i
+		 @inbounds row_idx[start_pos:end_pos] .= top_idxs
+		 @inbounds col_idx[start_pos:end_pos] .= i
+	     end
+	end
     end
+
+    # Wait for all tasks to complete
+    foreach(wait, tasks)
 
     return FlyHash(sparse(row_idx, col_idx, true, m, n))
 end

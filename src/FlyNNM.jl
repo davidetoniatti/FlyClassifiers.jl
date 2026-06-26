@@ -24,7 +24,6 @@ function fit(::Type{FlyNNM}, X::AbstractMatrix, y::AbstractVector, P::AbstractPr
     m, d_P = size(P)
 
     @assert d_X == d_P "Dimension mismatch: X has $d_X rows, M has $d_P rows."
-
     @assert length(y) == n "Number of labels does not match number of data points."
 
     # Robust mapping of class labels to integer indices (1, 2, ..., l).
@@ -36,26 +35,24 @@ function fit(::Type{FlyNNM}, X::AbstractMatrix, y::AbstractVector, P::AbstractPr
     # Compute the FlyHash
     H = FlyHash(X, P, k).matrix
 
-    # Safe parallelization with thread-local storage for weights.
-    # We initialize a weight matrix for each thread to prevent race conditions.
-    W_local = [zeros(Int32, l, m) for _ in 1:nthreads()]
+    tasks = map(chunks(1:n; n=nthreads())) do inds
+        @spawn begin
+            W_local = zeros(Int32, l, m)
 
-    @threads for i in 1:n  # Iterate over columns (data points).
-        tid = threadid()
-        class_idx = class_map[@inbounds y[i]]
-
-        # Directly update weights using sparse indices.
-        # We get the non-zero row indices for column `i` of `H` and increment
-        # the corresponding weights directly.
-        @inbounds for j in H.colptr[i]:(H.colptr[i+1]-1)
-            r = H.rowval[j]
-            W_local[tid][class_idx, r] += 1
+            for i in inds
+                class_idx = class_map[@inbounds y[i]]
+                @inbounds for j in H.colptr[i]:(H.colptr[i+1]-1)
+                    r = H.rowval[j]
+                    W_local[class_idx, r] += 1
+                end
+            end
+            return W_local
         end
     end
 
     # Reduction (combination) of results.
     # Once all threads are finished, we combine their local weight matrices.
-    W_counts = reduce(+, W_local)
+    W_counts = sum(fetch.(tasks))
 
     # Apply the final weight transformation with special handling for γ = 0.
     W_final = if γ == 0
@@ -85,17 +82,17 @@ Ties are broken deterministically by selecting the first class with minimum scor
 function predict(model::FlyNNM, X::AbstractMatrix)
     H = FlyHash(X, model.P, model.k).matrix
     fX = model.W * H
-    
+
     l, n = size(fX)
     y_pred = Vector{eltype(model.class_labels)}(undef, n)
-    
+
     @threads for i in 1:n
         col = @view fX[:, i]
-        
+
         # Find the index of the minimum value (deterministic tie-break)
         min_val = typemax(eltype(fX))
         winner_idx = 1
-        
+
         @inbounds for j in 1:l
             val = col[j]
             if val < min_val
@@ -103,10 +100,10 @@ function predict(model::FlyNNM, X::AbstractMatrix)
                 winner_idx = j
             end
         end
-        
+
         @inbounds y_pred[i] = model.class_labels[winner_idx]
     end
-    
+
     return y_pred
 end
 

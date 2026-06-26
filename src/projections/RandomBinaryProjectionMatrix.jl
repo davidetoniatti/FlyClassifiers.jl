@@ -28,27 +28,29 @@ function RandomBinaryProjectionMatrix(m::Int, d::Int, s::Int; seed::Int=42)
     row_idx = Vector{Int}(undef, nnz)
     col_idx = Vector{Int}(undef, nnz)
 
-    # Thread-local storage to avoid race conditions and allocations.
-    # Each thread gets its own temporary vector `buf` for intermediate samplings.
-    buf = [Vector{Int}(undef, s) for _ in 1:nthreads()]
-    local_rngs = [Xoshiro(seed + k) for k in 1:nthreads()]
-
     # Use multithreading to generate rows in parallel.
-    @threads for i in 1:m
-        tid = threadid()
-        start_pos = (i - 1) * s + 1
-        end_pos = i * s
+    tasks = map(chunks(1:m; n=nthreads())) do inds
+	@spawn begin
+	    chunk_seed = seed + first(inds)
+	    rng = Xoshiro(chunk_seed)
+	    # Task-local buffer for sampling indices
+	    idxs = Vector{Int}(undef, s)
 
-        idxs = buf[tid]
-	rng = local_rngs[tid]
+	    for i in inds
+		start_pos = (i - 1) * s + 1
+		end_pos = i * s
 
-        # Sampling.
-        sample!(rng, 1:d, idxs; replace=false)
+		# Sampling.
+		sample!(rng, 1:d, idxs; replace=false)
 
-        # Fill the row and column index vectors.
-        @inbounds row_idx[start_pos:end_pos] .= i
-        @inbounds col_idx[start_pos:end_pos] .= idxs
+		# Fill the row and column index vectors.
+		@inbounds row_idx[start_pos:end_pos] .= i
+		@inbounds col_idx[start_pos:end_pos] .= idxs
+	    end
+	end
     end
+
+    foreach(wait, tasks)
 
     # The values are all `true`, so we can construct the sparse matrix directly.
     sp_mat = sparse(row_idx, col_idx, true, m, d)
